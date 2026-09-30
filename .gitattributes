@@ -1,0 +1,8 @@
+# 统一行尾，避免 Windows 上 core.autocrlf 把仓库里的 LF 文件整体改写成 CRLF
+* text=auto eol=lf
+*.bat text eol=crlf
+
+# 二进制资源不做行尾转换
+*.png binary
+*.jar binary
+*.p12 binary

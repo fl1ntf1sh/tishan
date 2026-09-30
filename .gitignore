@@ -1,0 +1,30 @@
+*.iml
+.gradle/
+.kotlin/
+/local.properties
+/.idea/
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+app/build/
+*.apk
+*.aab
+/keystore/
+/keystore.properties
+
+# docs/ 是本机资料（真实题库数据、验收截图、图标源），整体不入版本库
+/docs/
+
+# 本机项目记忆：AGENTS.md、.memoflow/、MemSearch 索引，不入版本库
+/AGENTS.md
+/.memoflow/
+/.memsearch/
+
+# 签名材料永不入库：私钥与明文口令
+/keystore/
+/keystore.properties
+keystore.properties
+*.jks
+*.keystore
+*.p12
