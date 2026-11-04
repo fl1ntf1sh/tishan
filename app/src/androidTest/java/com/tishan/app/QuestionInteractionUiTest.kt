@@ -113,4 +113,32 @@ class QuestionInteractionUiTest {
         compose.waitUntil { exited }
         assertTrue(runBlocking { practice.openSession("ui-exam", QuestionType.SINGLE_CHOICE, PracticeOrderMode.SEQUENTIAL)!!.isSubmitted })
     }
+
+    @Test fun correctAnswerAutoAdvancesButLastQuestionStays() {
+        runBlocking {
+            database.questionDao().insertWithOptions(
+                QuestionEntity("ui-single-2", "ui-exam", "单选题", 3, "第二题题干", "A", "解析", true, null),
+                listOf(QuestionOptionEntity("ui-single-2", "A", "选项一", 0), QuestionOptionEntity("ui-single-2", "B", "选项二", 1)),
+            )
+        }
+        var session by mutableStateOf(runBlocking { practice.openSession("ui-exam", QuestionType.SINGLE_CHOICE, PracticeOrderMode.SEQUENTIAL)!! })
+        var exited = false
+        compose.setContent { TishanTheme { PracticeSessionScreen(session, practice, { session = it }, { exited = true }) } }
+        assertEquals("ui-single", session.currentQuestion.question.internalId)
+
+        compose.onNodeWithTag("practice-question-list").performScrollToIndex(2)
+        compose.onNodeWithContentDescription("A 选项一").performClick()
+        compose.waitUntil(2_000) { session.currentQuestion.question.internalId == "ui-single-2" }
+        assertFalse("答对后应自动进入下一题，且不应退出会话", exited)
+        assertFalse(session.isSubmitted)
+
+        compose.onNodeWithTag("practice-question-list").performScrollToIndex(2)
+        compose.onNodeWithContentDescription("A 选项一").performClick()
+        compose.waitUntil { session.isSubmitted }
+        Thread.sleep(1_200)
+        compose.waitForIdle()
+        assertEquals("最后一题答对后应停留在本题", "ui-single-2", session.currentQuestion.question.internalId)
+        assertFalse("最后一题不应自动完成", exited)
+        compose.onNodeWithText("完成").assertIsDisplayed().assertIsEnabled()
+    }
 }

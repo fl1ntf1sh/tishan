@@ -75,6 +75,7 @@ import com.tishan.app.domain.question.AnswerJudgement
 import com.tishan.app.domain.question.ExpectedAnswer
 import com.tishan.app.domain.question.QuestionType
 import com.tishan.app.domain.question.SubmittedAnswer
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
@@ -436,6 +437,9 @@ private fun PracticeScreen(
     }
 }
 
+/** 答对后自动进入下一题前，留给判题反馈的展示时间。 */
+private const val AUTO_ADVANCE_DELAY_MILLIS = 600L
+
 @Composable
 internal fun PracticeSessionScreen(
     session: PracticeSessionData,
@@ -456,6 +460,7 @@ internal fun PracticeSessionScreen(
 
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var autoAdvance by remember { mutableStateOf(false) }
     val listState = rememberLazyListState()
     LaunchedEffect(question.internalId) { listState.scrollToItem(0) }
     fun runAction(action: suspend () -> Unit) {
@@ -469,19 +474,41 @@ internal fun PracticeSessionScreen(
             finally { busy = false }
         }
     }
-    fun submit(answer: SubmittedAnswer) = runAction { onSessionChange(repository.submitCurrent(session, answer)) }
+    fun submit(answer: SubmittedAnswer) = runAction {
+        val updated = repository.submitCurrent(session, answer)
+        // 答对且后面还有题时才自动翻页；最后一题的按钮是「完成」，绝不自动触发。
+        autoAdvance = updated.judgement == AnswerJudgement.Correct &&
+            updated.currentIndex < updated.questions.lastIndex
+        onSessionChange(updated)
+    }
     fun saveSelection(keys: Set<String>) = runAction {
         val updated = session.copy(selectedChoiceKeys = keys, isSubmitted = false, judgement = null)
         repository.saveDraft(updated)
         onSessionChange(updated)
     }
-    fun exit() = runAction { repository.saveDraft(session); onExit() }
-    fun next() = runAction {
-        if (session.currentIndex == session.questions.lastIndex) onExit()
-        else onSessionChange(repository.nextQuestion(session))
+    fun exit() {
+        autoAdvance = false
+        runAction { repository.saveDraft(session); onExit() }
     }
-    fun previous() = runAction { onSessionChange(repository.previousQuestion(session)) }
+    fun next() {
+        autoAdvance = false
+        runAction {
+            if (session.currentIndex == session.questions.lastIndex) onExit()
+            else onSessionChange(repository.nextQuestion(session))
+        }
+    }
+    fun previous() {
+        autoAdvance = false
+        runAction { onSessionChange(repository.previousQuestion(session)) }
+    }
     BackHandler { exit() }
+
+    // 答对后自动点一次「下一题」：答错停留看解析，最后一题停留在「完成」按钮，手动翻页会取消。
+    LaunchedEffect(autoAdvance, session.currentIndex) {
+        if (!autoAdvance) return@LaunchedEffect
+        delay(AUTO_ADVANCE_DELAY_MILLIS)
+        if (autoAdvance) next()
+    }
 
     TishanQuestionLayout(actions = {
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
